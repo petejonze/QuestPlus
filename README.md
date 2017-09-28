@@ -19,6 +19,9 @@ There are no MATLAB dependencies in the core QUEST+ algorithm. However, several 
 ### License
 GNU GPL v3.0
 
+### More Info
+[Watson (2017) QUEST+: A general multidimensional Bayesian adaptive psychometric method, Journal of Vision, 17(10)](http://jov.arvojournals.org/article.aspx?articleid=2611972)
+
 ### Enjoy!
 @petejonze  
 28/09/2017
