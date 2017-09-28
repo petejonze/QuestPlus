@@ -65,6 +65,7 @@ classdef QuestPlus < handle
     %   0.0.3	PJ	09/10/2016 : fixed error in calculation of posterior PDFs (now properly replicates Watson's examples\n
     %   0.0.4	PJ	11/11/2016 : Correcting bugs pointed out by Josh\n
     %   0.0.5	PJ	24/09/2017 : Cosmetic adjustments for JORS\n
+    %   1.0.0	PJ	28/09/2017 : First GitHub release\n
     %
     % @todo allow for non-precomputed-target-stimuli in update?
     % @todo could add a single-precision mode for if greater
