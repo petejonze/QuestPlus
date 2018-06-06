@@ -66,6 +66,7 @@ classdef QuestPlus < handle
     %   0.0.4	PJ	11/11/2016 : Correcting bugs pointed out by Josh\n
     %   0.0.5	PJ	24/09/2017 : Cosmetic adjustments for JORS\n
     %   1.0.0	PJ	28/09/2017 : First GitHub release\n
+    %   1.0.1	PJ	20/04/2018 : Added Ricco's area example\n
     %
     % @todo allow for non-precomputed-target-stimuli in update?
     % @todo could add a single-precision mode for if greater
@@ -799,13 +800,34 @@ classdef QuestPlus < handle
             if (sf<Fmax) && (S<(log10(Gmax)-D))
                 S = log10(Gmax) - D;
             end
-            
+
             % convert 'sensitivity' to 'contrast'
             S = exp10(S); % linearize (convert dB to linear units)
-            alpha = 100/S; % convert sensitivity to %contrast threshold (e.g., 2=>50; 10=>10; 200=>0.5)
+            alpha = 1/S; % convert sensitivity to contrast threshold (e.g., 2=>50; 10=>10; 200=>0.5)
+
+            % PF
+            pC = pf_gamma+(1 - pf_gamma - pf_lambda).*(1-exp(-10.^(pf_beta.*(log10(c)-log10(alpha)))));
+        end
+ 
+        function pC = qRicco_getPC(A_deg2,c, m1,m2,Rx,Ry, pf_beta,pf_gamma,pf_lambda)
+            % static helper function for use with QuestPlus.runTests(9)
+            
+            % fit in log-log coordinates
+            A_deg2 = log10(A_deg2);
+            c = log10(c);
+            Rx = log10(Rx);
+            Ry = log10(Ry);
+
+          	% determine threshold
+            cThresh  = (Ry - (Rx-A_deg2)*m1).*(A_deg2<Rx) + (Ry - (Rx-A_deg2)*m2).*(A_deg2>=Rx);
+
+            % validate
+            if any(imag(cThresh))
+                error('invalid ??????')
+            end
             
             % PF
-            pC = pf_gamma+(1 - pf_gamma - pf_lambda).*(1-exp(-1.*10.^(pf_beta.*(log10(c)-log10(alpha)))));
+            pC = pf_gamma+(1 - pf_gamma - pf_lambda).*(1-exp(-10.^(pf_beta.*(c-cThresh))));
         end
         
         function QP = runExample(exampleN)
@@ -818,10 +840,12 @@ classdef QuestPlus < handle
             %   5. More complex, 2D case, with non-uniform prior
             %   6. A direct example from P7 of Watson's original paper
             %   7. quick CSF (requires external function qCSF_getPC.m)  
+            %   8. Classic/simple psychometric function fitting
+            %   9. qRicco -- fitting Ricco's area
             %
-            % @param    exampleN	Example to run [1|2|3|4|5|6|7]. Defaults to 1.
+            % @param    exampleN	Example to run [1|2|3|4|5|6|7|8|9]. Defaults to 1.
             %
-            % @date     26/06/14
+            % @date     20/04/18
             % @author   PRJ
             %
             
@@ -1023,23 +1047,23 @@ classdef QuestPlus < handle
                     F = @QuestPlus.qCSF_getPC;
                     
                     % set true param(s)
-                    Gmax        = 150;	% peak gain (sensitivity): 2 -- 2000
-                    Fmax        = 3; 	% peak spatial frequency: 0.2 to 20 cpd
+                    Gmax        = 400;	% peak gain (sensitivity): 2 -- 2000
+                    Fmax        = 5; 	% peak spatial frequency: 0.2 to 20 cpd
                     B           = 1; 	% bandwidth (full width at half maximum): 1 to 9 octaves
-                    D           = 0.4; 	% truncation level at low spatial frequencies: 0.02 to 2 decimal log units
-                    pf_beta     = 3;    % psychometric function: slope
+                    D           = 0.5; 	% truncation level at low spatial frequencies: 0.02 to 2 decimal log units
+                    pf_beta     = 2;    % psychometric function: slope
                     pf_gamma    = 0.25;  % psychometric function: guess rate
                     pf_lambda   = 0.05;    % psychometric function: lapse rate
                     trueParams  = [Gmax Fmax B D pf_beta pf_lambda pf_gamma];
                     
                     % define testing domain
                     stimDomain = {logspace(log10(.25), log10(40), 15)   ... % spatial frequency
-                        ,logspace(log10(0.01), log10(100), 15)          ... % contrast
+                        ,logspace(log10(0.001), log10(1), 15)          ... % contrast
                         };
                     paramDomain = {linspace(2, 2000, 10)                ...
                         ,logspace(log10(0.2), log10(20), 10)            ...
                         ,linspace(1, 9, 10)                             ...
-                        ,linspace(0.02, 2, 10)                          ...
+                        ,0.4                          ... %,linspace(0.02, 2, 10)                          ...
                         ,pf_beta                                        ...
                         ,pf_gamma                                       ...
                         ,pf_lambda                                      ...
@@ -1048,13 +1072,13 @@ classdef QuestPlus < handle
                     
                     % define priors
                     priors = cell(size(paramDomain));
-                    priors{1} = normpdf(paramDomain{1}, 800, 200*2);
+                    priors{1} = normpdf(paramDomain{1}, 100, 200*2);
                     priors{1} = priors{1}./sum(priors{1});
-                    priors{2} = normpdf(paramDomain{2}, 7, 2*2);
+                    priors{2} = normpdf(paramDomain{2}, 2.5, 2*2);
                     priors{2} = priors{2}./sum(priors{2});
                     priors{3} = normpdf(paramDomain{3}, 3, 1*2);
                     priors{3} = priors{3}./sum(priors{3});
-                    priors{4} = normpdf(paramDomain{4}, 1, .15*2);
+                    priors{4} = normpdf(paramDomain{4}, 0.5, .15*2);
                     priors{4} = priors{4}./sum(priors{4});
                     priors{5} = 1;
                     priors{6} = 1;
@@ -1070,9 +1094,9 @@ classdef QuestPlus < handle
                     QP = QuestPlus(F, stimDomain, paramDomain, respDomain, stopRule, stopCriterion, minNTrials, maxNTrials);
                     
                     % initialise priors/likelihoods
-                    fn = 'myLikelihoods.mat';
+                    fn = 'myLikelihoods_CSF.mat';
                     if exist(fn, 'file')
-                        QP.initialise(priors, fn)
+                        QP.initialise(priors, fn);
                     else
                         QP.initialise(priors);
                         QP.saveLikelihoods(fn);
@@ -1095,7 +1119,7 @@ classdef QuestPlus < handle
                     tic()
                     while ~QP.isFinished()
                         stim = QP.getTargetStim();
-                        pC = qCSF_getPC(stim(1),stim(2), Gmax,Fmax,B,D, pf_beta,pf_gamma,pf_lambda);
+                        pC = QP.qCSF_getPC(stim(1),stim(2), Gmax,Fmax,B,D, pf_beta,pf_gamma,pf_lambda);
                         anscorrect = rand() < pC;
                         % anscorrect = rand() > 0.5; % GUESSING
                         QP.update(stim, anscorrect);
@@ -1167,9 +1191,11 @@ classdef QuestPlus < handle
                     % annotate and format
                     legend('Prior','Empirical','True', 'Location','South');
                     set(gca, 'XScale','log', 'YScale','log');
+                    
                     set(gca, 'XTick',[.5 1 2 5 10 20], 'YTick',[2 10 50 300 2000]);
                     xlabel('Spatial Frequency (cpd)'); ylabel('Contrast Sensitivity (1/C)')
-                    xlim([.25 40]); ylim([1 2000]);
+                    xlim([.25 60]);
+                    ylim([1 1000]);
                     
                     % don't bother with rest of the QuestPlus.runExamples()
                     % function
@@ -1215,6 +1241,215 @@ classdef QuestPlus < handle
                     % get final parameter estimates
                     endGuess_mean = QP.getParamEsts('mean');
                     endGuess_mode = QP.getParamEsts('mode');
+                case 9 % quick Ricco
+                    % set model
+                    F = @QuestPlus.qRicco_getPC;
+                    
+                    % set true param(s)
+                    m1 = -1;        % Ricco's Law: Slope of segment 1                           [NB: fitted in log-log space]
+                    m2 = 0;         % Ricco's Law: Slope of segment 2                           [NB: fitted in log-log space]
+                    Rx = 5;         % Ricco's Law: Ricco's Area in deg2 (point of inflection)   [NB: in linear units, not log]
+                    Ry = 0.01;    	% Ricco's Law: Threshold at the point Rx                    [NB: in linear units, not log]
+                    pf_beta     = 1;    % psychometric function: slope
+                    pf_gamma    = 0.1;  % psychometric function: guess rate
+                    pf_lambda   = 0.3;	% psychometric function: lapse rate
+                    trueParams  = [m1 m2 Rx Ry pf_beta pf_lambda pf_gamma];
+             
+                    % define stimulus domain
+					d_deg = logspace(log10(0.5), log10(10), 15);    % stimulus size in diameter (deg)
+					A_deg2 = pi * (d_deg/2).^2;                     % stimulus size in area  (deg2)
+                    c = logspace(log10(0.001), log10(0.75), 15);	% Weber Contrast  dL/Lb => (Lt-Lb)/Lb, where Lb is background luminance, in cd/m2d, and Lt is the target luminance, in cd/m2d
+                                                                    % NB: Increment Contrast Threshold typically defined as the log of this:  log10(dL / Lb) => log10( (Lt-Lb)/Lb )
+                    stimDomain = {A_deg2, c};
+                    
+                    % define model parameter domain              
+                    paramDomain = {-logspace(log10(0.75), log10(1.5), 6) 	... % 6 x m1	[slope of segment 1: should always be -1?]
+                        ,[0 -logspace(log10(0.01), log10(.5), 5)]           ... % 6 x m2 	[slope of segment 2: should be 0?]
+                        ,logspace(log10(0.25), log10(50), 12)             	... % 12 x Rx 	[Riccos area in deg2 -- point of inflection]
+                        ,logspace(log10(c(1)), log10(c(end)), 12)           ... % 12 x Ry	[Threshold at the point Rx]
+                        ,pf_beta                                            ...
+                        ,pf_gamma                                           ...
+                        ,pf_lambda                                          ...
+                        };
+                    
+                    % plot psychometric function (for a given/abritrary
+                    % combination of parameters)
+                    tmp_m1 = prctile(paramDomain{1}, [100 50 0]);
+                    tmp_m2 = prctile(paramDomain{2}, [100 50 0]);
+                    tmp_Rx = prctile(paramDomain{3}, [0 50 100]);
+                    tmp_Ry = prctile(paramDomain{4}, [0 50 100]);
+                    figure('Position', [0 200 1400 400]);
+                    ylabel('Percent Correct');
+                    for i = 1:3
+                        subplot(1,3,i);
+                        pC = QuestPlus.qRicco_getPC(A_deg2,c, tmp_m1(i),tmp_m2(i),tmp_Rx(i),tmp_Ry(i), pf_beta,pf_gamma,pf_lambda);
+                        % plot with log x-axis
+                        plot(log10(c), pC, 'o')
+                        set(gca, 'XTick',log10([0.001 0.01 0.1 1]), 'XTickLabel',[0.001 0.01 0.1 1]);
+                        % label
+                        title(sprintf('m1=%1.2f, m2=%1.2f, Rx=%1.2f, Ry=%1.2f', tmp_m1(i),tmp_m2(i),tmp_Rx(i),tmp_Ry(i)));
+                        if i == 2
+                            xlabel('Contrast');
+                        end
+                    end
+                    
+                    % plot search space -- the goal of Q+ is to find which
+                    % of these lines best fits the observer/data
+                    figure('Name', 'Search Space');
+                    hold on
+                    for i = 1:length(paramDomain{1})
+                        for j = 1:length(paramDomain{2})
+                            for k = 1:length(paramDomain{3})
+                                for l = 1:length(paramDomain{4})
+                                    % get params (NB: values fitted in log-log space)
+                                    tmp_A_deg2 = log10(A_deg2);
+                                    tmp_m1 = paramDomain{1}(i);
+                                    tmp_m2 = paramDomain{2}(j);
+                                    tmp_Rx = log10(paramDomain{3}(k)); % fitt
+                                    tmp_Ry = log10(paramDomain{4}(l));
+                                    
+                                    % determine threshold (logged weber fraction)
+                                    tmp_cThresh  = (tmp_Ry - (tmp_Rx-tmp_A_deg2)*tmp_m1).*(tmp_A_deg2<tmp_Rx) + (tmp_Ry - (tmp_Rx-tmp_A_deg2)*tmp_m2).*(tmp_A_deg2>=tmp_Rx);
+                                    
+                                    % plot
+                                    plot(tmp_A_deg2, tmp_cThresh, 'r-');
+                                end
+                            end
+                        end
+                    end
+                    
+                    % define response domain
+                    respDomain = [0 1];
+                    
+                    % define priors
+                    priors = cell(size(paramDomain));
+                    priors{1} = ones(size(paramDomain{1})) ./ length(paramDomain{1});
+                    priors{2} = ones(size(paramDomain{2})) ./ length(paramDomain{2});
+                    priors{3} = ones(size(paramDomain{3})) ./ length(paramDomain{3});
+                    priors{4} = ones(size(paramDomain{4})) ./ length(paramDomain{4});
+                    priors{5} = 1;
+                    priors{6} = 1;
+                    priors{7} = 1;
+                                        
+                    % define other parameters (blank for default)
+                    stopRule        = [];
+                    stopCriterion   = [];
+                    minNTrials      = 150;
+                    maxNTrials      = 150;
+                    
+                    % create QUEST+ object
+                    QP = QuestPlus(F, stimDomain, paramDomain, respDomain, stopRule, stopCriterion, minNTrials, maxNTrials);
+                    
+                    % initialise priors/likelihoods
+                    fn = 'myLikelihoods_Ricco.mat';
+                    if exist(fn, 'file')
+                       QP.initialise(priors, fn)
+                    else
+                     	QP.initialise(priors);
+                     	QP.saveLikelihoods(fn);
+                    end
+                    
+                    % display
+                    QP.disp();
+                    startGuess_mean = QP.getParamEsts('mean');
+                    fprintf('m1 estimate: %1.2f   [true: %1.2f]\n', startGuess_mean(1), m1);
+                    fprintf('m2 estimate: %1.2f   [true: %1.2f]\n', startGuess_mean(2), m2);
+                    fprintf('Rx estimate: %1.2f   [true: %1.2f]\n', startGuess_mean(3), Rx);
+                    fprintf('Ry estimate: %1.2f   [true: %1.2f]\n', startGuess_mean(4), Ry);
+
+                    % run -------------------------------------------------
+                    profile on
+                    tic()
+                    while ~QP.isFinished()
+                        % get stimulus (input)
+                        if rand()<=0.1 % sample randomly on 10% of trials
+                            stim = [randsample(stimDomain{1}, 1, true, (1:length(stimDomain{2})).^3); % ALT: unique(QP.stimDomain(1,:))
+                                    randsample(stimDomain{2}, 1, true, (1:length(stimDomain{2})).^4)]; % ALT: unique(QP.stimDomain(2,:))
+                        else
+                            stim = QP.getTargetStim();
+                        end
+                        % get response (output)
+                        pC = QP.qRicco_getPC(stim(1),stim(2), m1,m2,Rx,Ry, pf_beta,pf_gamma,pf_lambda);
+                        anscorrect = rand() < pC;
+                        % update
+                        QP.update(stim, anscorrect);
+                    end
+                    toc()
+                    
+                    % get final parameter estimates
+                    endGuess_mean = QP.getParamEsts('mean');
+                    
+                    % display
+                    QP.disp();
+                    fprintf('m1 estimate: %1.2f	[true: %1.2f]	[start: %1.2f]\n', endGuess_mean(1), m1, startGuess_mean(1));
+                    fprintf('m2 estimate: %1.2f	[true: %1.2f]	[start: %1.2f]\n', endGuess_mean(2), m2, startGuess_mean(2));
+                    fprintf('Rx estimate: %1.2f	[true: %1.2f]	[start: %1.2f]\n', endGuess_mean(3), Rx, startGuess_mean(3));
+                    fprintf('Ry estimate: %1.2f	[true: %1.2f]	[start: %1.2f]\n', endGuess_mean(4), Ry, startGuess_mean(4));
+                    
+                    % display debug info
+                    profile viewer
+                    
+                    % plot ------------------------------------------------
+                    % compute x values
+                    d_deg = logspace(log10(0.5), log10(10), 100);	% stimulus size in diameter (deg)
+					A_deg2 = pi * (d_deg/2).^2;                     % stimulus size in area  (deg2)
+                    
+                    % log for fitting
+                    A_deg2 = log10(A_deg2);
+                    
+                    % compute true function (y values)
+                    m1	= trueParams(1);
+                    m2	= trueParams(2);
+                    Rx	= log10(trueParams(3));
+                    Ry	= log10(trueParams(4));
+                    T_true  = (Ry - (Rx-A_deg2)*m1).*(A_deg2<Rx) + (Ry - (Rx-A_deg2)*m2).*(A_deg2>=Rx);
+
+                  	% compute starting guess function
+                    m1	= startGuess_mean(1);
+                    m2	= startGuess_mean(2);
+                    Rx	= log10(startGuess_mean(3));
+                    Ry	= log10(startGuess_mean(4));
+                    T_start  = (Ry - (Rx-A_deg2)*m1).*(A_deg2<Rx) + (Ry - (Rx-A_deg2)*m2).*(A_deg2>=Rx);
+
+                    % compute final guess function
+                    m1	= endGuess_mean(1);
+                    m2	= endGuess_mean(2);
+                    Rx	= log10(endGuess_mean(3));
+                    Ry	= log10(endGuess_mean(4));
+                    T_end  = (Ry - (Rx-A_deg2)*m1).*(A_deg2<Rx) + (Ry - (Rx-A_deg2)*m2).*(A_deg2>=Rx);
+
+                    % plot
+                    figure()
+                    hold on
+                    plot(A_deg2, T_start, 'k');
+                    plot(A_deg2, T_end, 'b:');
+                    plot(A_deg2, T_true, 'r--');
+                    
+                    % plot raw
+                    hold on
+                    for x = unique(QP.history_stim(1,:))
+                        for y = unique(QP.history_stim(2,:))
+                            idx = QP.history_stim(1,:)==x & QP.history_stim(2,:)==y;
+                            n = sum(idx);
+                            pc = mean(QP.history_resp(idx));
+                            if n>0
+                                fprintf('%1.2f, %1.2f = %i\n', x,y,n);
+                                %plot(x,y, 'o', 'markersize',4+n, 'markerfacecolor',[1-pc^.5 pc^.5 0]);
+                                plot(log10(x), log10(y), 'o', 'markersize',4+n, 'markerfacecolor',[1-pc^.5 pc^.5 0]);
+                            end
+                        end
+                    end
+
+                    % annotate and format
+                    legend('Prior','Empirical','True', 'Location','South');
+                    %set(gca, 'XScale','log', 'YScale','log');
+                    %set(gca, 'XTick',[.5 1 2 5 10 20], 'YTick',[2 10 50 300 2000]);
+                    %xlabel('Spatial Frequency (cpd)'); ylabel('Contrast Sensitivity (1/C)')
+                    %xlim([.25 40]); ylim([1 2000]);
+                    
+                    % don't bother with rest of the QuestPlus.runExamples()
+                    % function
+                    return;
                 otherwise
                     error('Specified example not recognised.\n\nTo run, type:\n   QP = QuestPlus.runExample(n)\nwhere n is an integer %i..%i\n\nE.g., QP = QuestPlus.runExample(6);', 1, 7);
             end
@@ -1262,6 +1497,8 @@ classdef QuestPlus < handle
             else
                 fprintf('too many domains to plot\n');
             end
+            
+            
             
             % All done
             fprintf('\n\nAll checks ok\n');

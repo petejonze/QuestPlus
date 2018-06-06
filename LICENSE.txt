@@ -1,6 +1,6 @@
 Copyright (c) 2015, Pete R Jones <petejonze@gmail.com>
 
-This software (phdthesis) is provided under the terms of the GNU GPL v3.0 license, a copy of which is included below.                 
+This software is provided under the terms of the GNU GPL v3.0 license, a copy of which is included below.                 
 					
 					GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
