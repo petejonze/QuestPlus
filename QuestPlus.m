@@ -55,6 +55,7 @@ classdef QuestPlus < handle
     %   QuestPlus.runExample(6)
     %   QuestPlus.runExample(7)
     %   QuestPlus.runExample(8)
+    %   QuestPlus.runExample(9)
     %
     % Author:
     %   Pete R Jones <petejonze@gmail.com>
@@ -72,6 +73,8 @@ classdef QuestPlus < handle
     % @todo could add a single-precision mode for if greater
     %       speed/optimisation is absolutely required
     % @todo changing priors shouldnt affect loading of likelihoods?
+    % @todo add check that priors/params/stim domains are ROW vectors (not
+    % column!)
     %
     % Copyright 2016 : P R Jones <petejonze@gmail.com>
     % *********************************************************************
@@ -213,15 +216,15 @@ classdef QuestPlus < handle
         
         %% == METHODS =================================================
         
-        function [] = initialise(obj, priors, likelihoodsFn)
+        function [] = initialise(obj, priors, likelihoodsFnOrDat)
             % Set priors and cache/compute likelihoods.
             %
             %   NB: Currently priors for each parameter are assumed to be
             %   independent. In future, could allow priors to be a full
             %   matrix, including covariation.
             %
-            % @param    priors          ######.
-            % @param    likelihoodsFn   ######.
+            % @param    priors              ######.
+            % @param    likelihoodsFnOrDat 	######.
             %
             % @date     01/08/16
             % @author   PRJ
@@ -238,22 +241,28 @@ classdef QuestPlus < handle
                 end
             end
             
-            % if a likelihood file has been specified, will load
-            % precomputed likelihood values from there, rather than
-            % recomputing them here (which can be an extremely expensive
-            % operation)
+            % if a likelihood file/matrix has been specified, will use
+            % these values, rather than recomputing them here (which can be
+            % an extremely expensive operation)
             precomputedLikelihoods = [];
-            if nargin>=3 && ~isempty(likelihoodsFn)
-                % console message
-                fprintf('Loading precomputed likelihoods from file..\n');
-                
-                % check file exists
-                if ~exist(likelihoodsFn, 'file')
-                    error('Specified likelihoods file not found: %s', likelihoodsFn);
+            if nargin>=3 && ~isempty(likelihoodsFnOrDat)
+                if ischar(likelihoodsFnOrDat) % assume the name of a file
+                    likelihoodsFn = likelihoodsFnOrDat;
+                    
+                    % console message
+                    fprintf('Loading precomputed likelihoods from file..\n');
+                    
+                    % check file exists
+                    if ~exist(likelihoodsFn, 'file')
+                        error('Specified likelihoods file not found: %s', likelihoodsFn);
+                    end
+                    
+                    % load
+                    dat = load(likelihoodsFn);
+                else % assume is the data itself
+                    dat = likelihoodsFnOrDat;
+                    likelihoodsFn = '<var>'; % dummy value for error error messages below
                 end
-                
-                % load
-                dat = load(likelihoodsFn);
                 
                 % check content is well-formed
                 if ~all(ismember({'stimDomain','paramDomain','respDomain','likelihoods'}, fieldnames(dat)))
@@ -262,30 +271,54 @@ classdef QuestPlus < handle
                 end
                 
                 % check dimensions match current QUEST+ object
+                ok = 1;
                 if ~all(size(dat.stimDomain) == size(obj.stimDomain))
-                    error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Stimulus domain size mismatch.\n   Expected Dimensions: [%s]\n   Detected Dimensions: [%s]', likelihoodsFn, sprintf('%i, ',size(obj.stimDomain)), sprintf('%i, ',size(dat.stimDomain)));
+                    warning('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Stimulus domain size mismatch.\n   Expected Dimensions: [%s]\n   Detected Dimensions: [%s]', likelihoodsFn, sprintf('%i, ',size(obj.stimDomain)), sprintf('%i, ',size(dat.stimDomain)));
+                    userinpt = input('replace existing file? (y/n): ', 's');
+                    ok = 0;
+                    replace = lower(userinpt(1))=='y';
                 elseif ~all(size(dat.paramDomain) == size(obj.paramDomain))
-                    error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Parameter domain size mismatch.\n   Expected Dimensions: [%s]\n   Detected Dimensions: [%s]', likelihoodsFn, sprintf('%i, ',size(obj.paramDomain)), sprintf('%i, ',size(dat.paramDomain)));
+                    warning('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Parameter domain size mismatch.\n   Expected Dimensions: [%s]\n   Detected Dimensions: [%s]', likelihoodsFn, sprintf('%i, ',size(obj.paramDomain)), sprintf('%i, ',size(dat.paramDomain)));
+                    userinpt = input('replace existing file? (y/n): ', 's');
+                    ok = 0;
+                    replace = lower(userinpt(1))=='y';
                 elseif ~all(size(dat.respDomain) == size(obj.respDomain))
-                    error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Response domain size mismatch.\n   Expected Dimensions: [%s]\n   Detected Dimensions: [%s]', likelihoodsFn, sprintf('%i, ',size(obj.respDomain)), sprintf('%i, ',size(dat.respDomain)));
-                end
-               	% check contents match current QUEST+ object
-                if ~all(dat.stimDomain(:) == obj.stimDomain(:))
-                    disp(obj.stimDomain)
-                    disp(dat.stimDomain)
-                    error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Stimulus domain content mismatch', likelihoodsFn);
-                elseif ~all(dat.paramDomain(:) == obj.paramDomain(:))
-                    disp(obj.paramDomain)
-                    disp(dat.paramDomain)
-                    error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Parameter domain content mismatch', likelihoodsFn);
-                elseif ~all(dat.respDomain(:) == obj.respDomain(:))
-                    disp(obj.respDomain)
-                    disp(dat.respDomain)
-                    error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Response domain content mismatch', likelihoodsFn);
+                    warning('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Response domain size mismatch.\n   Expected Dimensions: [%s]\n   Detected Dimensions: [%s]', likelihoodsFn, sprintf('%i, ',size(obj.respDomain)), sprintf('%i, ',size(dat.respDomain)));
+                    userinpt = input('replace existing file? (y/n): ', 's');
+                    ok = 0;
+                    replace = lower(userinpt(1))=='y';
                 end
                 
-                % set
-                precomputedLikelihoods = dat.likelihoods;
+                if ~ok
+                    if replace
+                        fprintf('Deleting old likelihoodsFn...\n');
+                        delete(likelihoodsFn);
+                        % restarting
+                        obj.initialise(priors);
+                        obj.saveLikelihoods(likelihoodsFn);
+                        return;
+                    else
+                        error('Cannot continue. Delete existing likelihoodsFn, or change requested parameters to match');
+                    end
+                else
+                    % check contents match current QUEST+ object
+                    if ~all(dat.stimDomain(:) == obj.stimDomain(:))
+                        disp(obj.stimDomain)
+                        disp(dat.stimDomain)
+                        error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Stimulus domain content mismatch', likelihoodsFn);
+                    elseif ~all(dat.paramDomain(:) == obj.paramDomain(:))
+                        disp(obj.paramDomain)
+                        disp(dat.paramDomain)
+                        error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Parameter domain content mismatch', likelihoodsFn);
+                    elseif ~all(dat.respDomain(:) == obj.respDomain(:))
+                        disp(obj.respDomain)
+                        disp(dat.respDomain)
+                        error('The following error was detected when attempting to load the precomputed likelihoods in %s:\n\n   Response domain content mismatch', likelihoodsFn);
+                    end
+                    
+                    % set
+                    precomputedLikelihoods = dat.likelihoods;
+                end
             end
 
             % ensure inputs are cells, for consistency (format required if
@@ -716,7 +749,8 @@ classdef QuestPlus < handle
             dat.likelihoods = obj.likelihoods; %#ok (saved below)
             
             % save to disk
-            save(fn, '-struct', 'dat')
+            %save(fn, '-struct', 'dat')
+            save(fn, '-struct', 'dat','-v7.3')
         end
         
         function [] = disp(obj)
@@ -796,7 +830,7 @@ classdef QuestPlus < handle
             % static helper function for use with QuestPlus.runTests(7)
             
             % CSF
-            S = log10(Gmax) - log10(2) * ( (log10(sf) - log10(Fmax)) / log10(2*B)/2 ).^2;
+            S = log10(Gmax) - log10(2) * ( (log10(sf) - log10(Fmax)) / (log10(2*B)/2) ).^2;
             if (sf<Fmax) && (S<(log10(Gmax)-D))
                 S = log10(Gmax) - D;
             end
@@ -1146,7 +1180,7 @@ classdef QuestPlus < handle
                     B       = trueParams(3);	% bandwidth (full width at half maximum): 1 to 9 octaves
                     D       = trueParams(4); 	% truncation level at low spatial frequencies: 0.02 to 2 decimal log units
                     f = logspace(log10(0.01), log10(60), 1000);
-                    Sp = log10(Gmax) - log10(2) * ( (log10(f) - log10(Fmax)) / log10(2*B)/2 ).^2;
+                    Sp = log10(Gmax) - log10(2) * ( (log10(f) - log10(Fmax)) / (log10(2*B)/2) ).^2;
                     idx = (f<Fmax) & (Sp<(log10(Gmax)-D));
                     S = Sp;
                     S(idx) = log10(Gmax) - D;
@@ -1158,7 +1192,7 @@ classdef QuestPlus < handle
                     B       = startGuess_mean(3);	% bandwidth (full width at half maximum): 1 to 9 octaves
                     D       = startGuess_mean(4); 	% truncation level at low spatial frequencies: 0.02 to 2 decimal log units
                     f = logspace(log10(0.01), log10(60), 1000);
-                    Sp = log10(Gmax) - log10(2) * ( (log10(f) - log10(Fmax)) / log10(2*B)/2 ).^2;
+                    Sp = log10(Gmax) - log10(2) * ( (log10(f) - log10(Fmax)) / (log10(2*B)/2) ).^2;
                     idx = (f<Fmax) & (Sp<(log10(Gmax)-D));
                     S = Sp;
                     S(idx) = log10(Gmax) - D;
@@ -1170,7 +1204,7 @@ classdef QuestPlus < handle
                     B       = endGuess_mean(3);     % bandwidth (full width at half maximum): 1 to 9 octaves
                     D       = endGuess_mean(4); 	% truncation level at low spatial frequencies: 0.02 to 2 decimal log units
                     f = logspace(log10(0.01), log10(60), 1000);
-                    Sp = log10(Gmax) - log10(2) * ( (log10(f) - log10(Fmax)) / log10(2*B)/2 ).^2;
+                    Sp = log10(Gmax) - log10(2) * ( (log10(f) - log10(Fmax)) / (log10(2*B)/2) ).^2;
                     idx = (f<Fmax) & (Sp<(log10(Gmax)-D));
                     S = Sp;
                     S(idx) = log10(Gmax) - D;
@@ -1260,6 +1294,20 @@ classdef QuestPlus < handle
 					A_deg2 = pi * (d_deg/2).^2;                     % stimulus size in area  (deg2)
                     c = logspace(log10(0.001), log10(0.75), 15);	% Weber Contrast  dL/Lb => (Lt-Lb)/Lb, where Lb is background luminance, in cd/m2d, and Lt is the target luminance, in cd/m2d
                                                                     % NB: Increment Contrast Threshold typically defined as the log of this:  log10(dL / Lb) => log10( (Lt-Lb)/Lb )
+                                         
+                    c = [
+                        0.0030
+                        0.0098
+                        0.0165
+                        0.0233
+                        0.0367
+                        0.0569
+                        0.0839
+                        0.1378
+                        0.2253
+                        0.3668
+                        0.6026
+                        0.9798];
                     stimDomain = {A_deg2, c};
                     
                     % define model parameter domain              
