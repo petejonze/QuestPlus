@@ -1293,8 +1293,7 @@ classdef QuestPlus < handle
 					d_deg = logspace(log10(0.5), log10(10), 15);    % stimulus size in diameter (deg)
 					A_deg2 = pi * (d_deg/2).^2;                     % stimulus size in area  (deg2)
                     c = logspace(log10(0.001), log10(0.75), 15);	% Weber Contrast  dL/Lb => (Lt-Lb)/Lb, where Lb is background luminance, in cd/m2d, and Lt is the target luminance, in cd/m2d
-                                                                    % NB: Increment Contrast Threshold typically defined as the log of this:  log10(dL / Lb) => log10( (Lt-Lb)/Lb )
-                                         
+                                                                    % NB: Increment Contrast Threshold typically defined as the log of this:  log10(dL / Lb) => log10( (Lt-Lb)/Lb )                  
                     c = [
                         0.0030
                         0.0098
@@ -1307,7 +1306,7 @@ classdef QuestPlus < handle
                         0.2253
                         0.3668
                         0.6026
-                        0.9798];
+                        0.9798]';
                     stimDomain = {A_deg2, c};
                     
                     % define model parameter domain              
@@ -1330,9 +1329,12 @@ classdef QuestPlus < handle
                     ylabel('Percent Correct');
                     for i = 1:3
                         subplot(1,3,i);
-                        pC = QuestPlus.qRicco_getPC(A_deg2,c, tmp_m1(i),tmp_m2(i),tmp_Rx(i),tmp_Ry(i), pf_beta,pf_gamma,pf_lambda);
-                        % plot with log x-axis
-                        plot(log10(c), pC, 'o')
+                        hold on
+                        for k = 1:length(c)
+                            pC = QuestPlus.qRicco_getPC(A_deg2,c(k), tmp_m1(i),tmp_m2(i),tmp_Rx(i),tmp_Ry(i), pf_beta,pf_gamma,pf_lambda);
+                            % plot with log x-axis
+                            plot(log10(c(k)), pC, 'o')
+                        end
                         set(gca, 'XTick',log10([0.001 0.01 0.1 1]), 'XTickLabel',[0.001 0.01 0.1 1]);
                         % label
                         title(sprintf('m1=%1.2f, m2=%1.2f, Rx=%1.2f, Ry=%1.2f', tmp_m1(i),tmp_m2(i),tmp_Rx(i),tmp_Ry(i)));
@@ -1411,7 +1413,7 @@ classdef QuestPlus < handle
                     while ~QP.isFinished()
                         % get stimulus (input)
                         if rand()<=0.1 % sample randomly on 10% of trials
-                            stim = [randsample(stimDomain{1}, 1, true, (1:length(stimDomain{2})).^3); % ALT: unique(QP.stimDomain(1,:))
+                            stim = [randsample(stimDomain{1}, 1, true, (1:length(stimDomain{1})).^3); % ALT: unique(QP.stimDomain(1,:))
                                     randsample(stimDomain{2}, 1, true, (1:length(stimDomain{2})).^4)]; % ALT: unique(QP.stimDomain(2,:))
                         else
                             stim = QP.getTargetStim();
