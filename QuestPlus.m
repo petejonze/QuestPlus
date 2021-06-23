@@ -836,7 +836,7 @@ classdef QuestPlus < handle
             end
 
             % convert 'sensitivity' to 'contrast'
-            S = exp10(S); % linearize (convert dB to linear units)
+            S = 10^S; % linearize (convert dB to linear units)
             alpha = 1/S; % convert sensitivity to contrast threshold (e.g., 2=>50; 10=>10; 200=>0.5)
 
             % PF
@@ -1211,9 +1211,9 @@ classdef QuestPlus < handle
                     S_end = S;
                     
                     % unlog units
-                    S_start = exp10(S_start);
-                    S_end	= exp10(S_end);
-                    S_true	= exp10(S_true);
+                    S_start = 10^S_start;
+                    S_end	= 10^S_end;
+                    S_true	= 10^S_true;
                     
                     % plot
                     figure()
